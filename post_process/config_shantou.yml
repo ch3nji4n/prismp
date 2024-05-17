@@ -1,0 +1,12 @@
+# auth: cj -- 2022/04/07
+# no tab, space only
+# # grammar checking: www.bejson.com/validators/yaml_editor/
+#
+meta:
+  server: hqlx27
+  version: 1.0
+  project: SOM_shantou
+
+season: winter
+
+baseday_shift: 0 
