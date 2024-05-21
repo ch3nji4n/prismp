@@ -1,5 +1,5 @@
 import arrow
-import os, sys, sh
+import os, sys
 import numpy as np
 import pandas as pd
 import config as cfg

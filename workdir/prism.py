@@ -18,7 +18,7 @@ import xarray as xr
 import pandas as pd
 import config as cfg
 import sklearn.metrics as skm
-from utils import utils
+import run_utils as utils
 
 class Prism:
 
@@ -35,44 +35,46 @@ class Prism:
 
     '''
     
-    def __init__(self, wrf_mesh, cfg, call_from='trainning'):
+    def __init__(self, wrf_mesh, logger, call_from='trainning'):
         """ construct prism classifier """
         self.nrec = wrf_mesh.n_rec
         nrow = self.nrow = wrf_mesh.n_row
         ncol = self.ncol = wrf_mesh.n_col
 
         self.nfea = nrow*ncol 
-        varlist = self.varlist = wrf_mesh.varlist 
-        self.nvar = len(varlist)
-        self.dateseries = wrf_mesh.dateseries
+        var_list = self.var_list = wrf_mesh.var_list 
+        self.nvar = len(var_list)
+        self.date_list = wrf_mesh.date_list
 
-        self.xlat, self.xlong = wrf_mesh.xlat, wrf_hdl.xlong
+        self.xlat, self.xlong = wrf_mesh.xlat, wrf_mesh.xlong
         
         # self.data(recl, nvar, nrow*ncol)
         self.data = np.empty([self.nrec, self.nvar,nrow*ncol])
 
         if call_from == 'trainning':
-            for idx, var in enumerate(varlist):
-                raw_data = wrf_mesh.data_dic[var].values.reshape((self.nrec,-1))
+            for idx, var in enumerate(var_list):
+                print( idx, var )
+                print( wrf_mesh.data_dict[var].values.shape )
+                raw_data = wrf_mesh.data_dict[var].values.reshape((self.nrec,-1))
                 self.data[:,idx,:] = raw_data
                 
-            self.preprocess = cfg['TRAINING']['preprocess_method']
-            self.n_nodex = int(cfg['TRAINING']['n_nodex'])
-            self.n_nodey = int(cfg['TRAINING']['n_nodey'])
-            self.sigma = float(cfg['TRAINING']['sigma'])
-            self.lrate = float(cfg['TRAINING']['learning_rate'])
-            self.iterations = int(cfg['TRAINING']['iterations'])
-            self.nb_func = cfg['TRAINING']['nb_func']
+            self.preprocess = cfg.preprocess_method
+            self.n_nodex = cfg.n_nodex
+            self.n_nodey = cfg.n_nodey
+            self.sigma = cfg.sigma
+            self.lrate = cfg.learning_rate
+            self.iterations = cfg.iterations
+            self.nb_func = cfg.nb_func
 
-            if self.preprocess  ==  'temporal_norm':
+            if self.preprocess == 'temporal_norm':
                 self.data, self.mean, self.std = utils.get_std_dim0(self.data)
  
         self.data = self.data.reshape((self.nrec,-1))
 
-    def train(self, train_data=None, verbose=True):
+    def train(self, logger, train_data=None, verbose=True):
         """ train the prism classifier """
         if verbose:
-            utils.write_log(print_prefix+'trainning...')
+            logger.info('trainning...')
         
         if train_data is None:
             train_data = self.data
@@ -92,36 +94,31 @@ class Prism:
         self.winners = [som.winner(x) for x in train_data]
         self.som = som
 
-    def evaluate(self,cfg, train_data=None, verbose=True):
+    def evaluate(self, logger, train_data=None, verbose=True):
         """ evaluate the clustering result """
         if verbose: 
-            utils.write_log(print_prefix+'prism evaluates...')
+            logger.info('prism evaluates...')
         
         if train_data is None:
             train_data  =  self.data
         
         edic = {'quatization_error':self.q_err}
-        
         label = [str(winner[0])+str(winner[1]) for winner in self.winners]
         s_score = skm.silhouette_score(train_data, label, metric = 'euclidean')
         
         edic.update({'silhouette_score':s_score})
-        
         if verbose:
-            utils.write_log(print_prefix+'prism evaluation dict: %s' % str(edic))
-
-        edic.update({'cfg_para':cfg._sections})
-        
+            logger.info('prism evaluation dict: %s' % str(edic))
         self.edic = edic
 
-    def save(self):
+    def save(self, logger):
         """ archive the prism classifier in database """
 
-        utils.write_log(print_prefix+'prism archives...')
+        logger.info('prism archives...')
         
         # archive evaluation dict
         with open(cfg.dir_evaluation, 'w') as f:
-            json.dump(self.edic,f)
+            json.dump(self.edic, f)
 
         # archive model
         with open(cfg.dir_archive, 'wb') as outfile:
@@ -129,8 +126,10 @@ class Prism:
 
         # archive classification result in csv
         with open(cfg.dir_cluster_csv, 'w') as f:
-            for datestamp, winner in zip(self.dateseries, self.winners):
-                f.write(datestamp.strftime('%Y-%m-%d_12:00:00,')+str(winner[0])+','+str(winner[1])+'\n')
+            for date_array, winner in zip(self.date_list, self.winners):
+                t = arrow.get(date_array.values.tolist()/1_000_000_000).format('YYYY-MM-DD_HH')
+                #f.write(date_array.strftime('%Y-%m-%d_12:00:00,')+str(winner[0])+','+str(winner[1])+'\n')
+                f.write(t+','+str(winner[0])+','+str(winner[1])+'\n')
 
         # archive classification result in netcdf
         centroid = self.som.get_weights()
@@ -140,7 +139,7 @@ class Prism:
         out_fn = cfg.dir_cluster_nc
         ds_out.to_netcdf(out_fn)
         
-        utils.write_log(print_prefix+'prism construction is completed!')
+        logger.info('prism construction is completed!')
 
     def org_output_nc(self, centroid):
         """ organize output file """
@@ -150,7 +149,7 @@ class Prism:
             'xlat':(['nrow', 'ncol'], self.xlat),
             'xlong':(['nrow', 'ncol'], self.xlong)}
         
-        ds_coords = {'nvar':self.varlist}
+        ds_coords = {'nvar':self.var_list}
         ds_attrs = {
             'preprocess_method':self.preprocess,
             'neighbourhood_function':self.nb_func}

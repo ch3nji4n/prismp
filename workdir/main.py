@@ -4,7 +4,12 @@ PRIsm SiMPlified
 author CJ
 base on PRISM v0.99
 '''
+
+import prism
+import arrow
+import wrf_reader
 import config as cfg
+import shutil as sh
 import os, sys, logging
 from os import path
 
@@ -35,7 +40,7 @@ def check_input():
     # chekc if nc files exist
     # exist program if no nc files
     dirname_nc = cfg.dirname_nc
-    if not path.exist( dirname_nc ):
+    if not path.exists( dirname_nc ):
         msg = 'Dirname:' + dirname_nc + ' not exists.'
         logger.error( msg )
         logger.info( 'Program exit.')
@@ -50,14 +55,15 @@ def check_input():
         exit()
  
 def main():
-    check_input( cfg )
+    check_input()
 
     wrf_mesh = wrf_reader.WrfMesh( logger )
     wrf_mesh.load_wrf()
 
-    prism = prism.Prism( wrf_mesh, logger )
-    prism.train()
-    prism.save()
+    model = prism.Prism( wrf_mesh, logger )
+    model.train( logger )
+    model.evaluate( logger )
+    model.save( logger )
 
     logger.info('PRISM ACCOMPLISHED')
 
