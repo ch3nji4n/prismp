@@ -346,3 +346,6 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and updates.
 ---
 
 **⭐ If you use this software in your research, please consider citing it!**
+
+## Contact
+Email: ch3nji4n@gmail.com
